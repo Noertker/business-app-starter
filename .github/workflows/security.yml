@@ -75,10 +75,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
 
   # Optional: AI security review on every PR. Requires an Anthropic API key
   # (billed per use) saved as the ANTHROPIC_API_KEY repo secret. Uncomment to enable.
