@@ -18,14 +18,22 @@ Run each check and report ✅ / ❌ / ⚠️ with a one-line plain-English note.
 - [ ] Live-mode webhook endpoint points at the production URL, and its signing secret is set
 - [ ] A real $1 purchase + refund works end to end
 
+- [ ] Stripe Customer portal saved (Settings → Billing) in **live** mode too; "Manage billing" works
+- [ ] Clicking Upgrade as an existing subscriber opens the portal, not a second checkout
+
 **Email (Resend)**
 - [ ] Sending domain verified (SPF/DKIM); test email lands in inbox, not spam
+- [ ] Supabase uses Resend as custom SMTP (Auth → Emails → SMTP Settings); a sign-in link reaches an address that is NOT on the Supabase team
+
+**Sign-in**
+- [ ] Supabase Redirect URLs list only exact production URLs (no `*` wildcards)
 
 **Data**
-- [ ] Supabase backups enabled; user knows how to restore
+- [ ] Supabase on a paid plan (daily backups, no pausing when quiet); owner knows how to restore a backup
 - [ ] Test/seed data removed from production
 
 **Operations & legal**
 - [ ] Custom domain + HTTPS working
 - [ ] Error alerts reach the owner's email
-- [ ] Privacy policy and terms pages exist and mention Stripe, Supabase and Resend as processors
+- [ ] `/privacy` and `/terms` have every `[PLACEHOLDER]` filled in (search the repo for `[`); refund policy stated
+- [ ] Account page: "Download my data" and "Delete account" both work

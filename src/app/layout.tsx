@@ -28,6 +28,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </nav>
         </header>
         <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">{children}</main>
+        <footer className="border-t border-black/10 dark:border-white/10">
+          <div className="mx-auto flex max-w-4xl flex-wrap gap-5 px-4 py-6 text-sm opacity-70">
+            <span>© {BUSINESS_NAME}</span>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+          </div>
+        </footer>
       </body>
     </html>
   );

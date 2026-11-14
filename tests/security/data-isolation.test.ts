@@ -77,4 +77,28 @@ describe.skipIf(!configured)("data isolation (row-level security)", () => {
     const { error } = await b.from("subscriptions").insert({ user_id: ids[1], status: "active" });
     expect(error).not.toBeNull();
   });
+
+  it("caps how many customers one account can create", async () => {
+    const rows = Array.from({ length: 1000 }, (_, i) => ({ name: `bulk ${i}` }));
+    const { error: underLimit } = await b.from("customers").insert(rows);
+    expect(underLimit).toBeNull();
+    const { error: overLimit } = await b.from("customers").insert({ name: "one too many" });
+    expect(overLimit?.message).toMatch(/limit/i);
+  });
+
+  it("deleting an account removes all of that user's data", async () => {
+    const c = await signedInClient(`c-${crypto.randomUUID().slice(0, 8)}@test.local`);
+    const cId = ids[ids.length - 1];
+    await c.from("customers").insert({ name: "C's customer" });
+    await admin.from("subscriptions").insert({ user_id: cId, status: "active" });
+
+    await admin.auth.admin.deleteUser(cId);
+    ids.pop();
+    const [{ count: customers }, { count: subs }] = await Promise.all([
+      admin.from("customers").select("*", { count: "exact", head: true }).eq("owner_id", cId),
+      admin.from("subscriptions").select("*", { count: "exact", head: true }).eq("user_id", cId),
+    ]);
+    expect(customers).toBe(0);
+    expect(subs).toBe(0);
+  });
 });
