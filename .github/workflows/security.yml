@@ -1,0 +1,95 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 9 * * 1" # weekly Monday scan catches newly-disclosed vulnerabilities
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Leaked secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # scan full history, not just the latest commit
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Free for personal accounts. Repos owned by a GitHub organization need a
+          # free license key from gitleaks.io set as the GITLEAKS_LICENSE secret.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  dependencies:
+    name: Vulnerable dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: npm audit (fail on high/critical in production deps)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm audit --omit=dev --audit-level=high
+          else
+            echo "No package-lock.json yet; skipping."
+          fi
+
+  tests:
+    name: Tests (incl. data-isolation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run typecheck
+      # Throwaway local database with your migrations applied, so the
+      # data-isolation tests run against real row-level security rules.
+      - name: Start test database
+        run: npx supabase start -x studio,imgproxy,vector,logflare,edge-runtime,storage-api,realtime,postgres-meta,supavisor
+      - name: Run tests
+        run: |
+          S=$(npx supabase status -o json)
+          export TEST_SUPABASE_URL=$(echo "$S" | jq -r .API_URL)
+          export TEST_SUPABASE_PUBLISHABLE_KEY=$(echo "$S" | jq -r .PUBLISHABLE_KEY)
+          export TEST_SUPABASE_SECRET_KEY=$(echo "$S" | jq -r .SECRET_KEY)
+          npm test
+      - name: Check every table has row-level security
+        run: |
+          OUT=$(psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -At -f supabase/checks/rls.sql)
+          if [ -n "$OUT" ]; then echo "::error::Tables missing row-level security:"; echo "$OUT"; exit 1; fi
+
+  codeql:
+    name: Code scanning (CodeQL)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3
+
+  # Optional: AI security review on every PR. Requires an Anthropic API key
+  # (billed per use) saved as the ANTHROPIC_API_KEY repo secret. Uncomment to enable.
+  # claude-review:
+  #   if: github.event_name == 'pull_request'
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     pull-requests: write
+  #     contents: read
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: anthropics/claude-code-security-review@main
+  #       with:
+  #         claude-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
