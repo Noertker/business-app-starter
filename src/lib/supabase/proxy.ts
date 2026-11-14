@@ -30,7 +30,8 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
 
   // Optimistic redirect only. Real protection is requireUser() + row-level security.
-  if (!data?.claims && request.nextUrl.pathname.startsWith("/dashboard")) {
+  const protectedPath = /^\/(dashboard|account)(\/|$)/.test(request.nextUrl.pathname);
+  if (!data?.claims && protectedPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

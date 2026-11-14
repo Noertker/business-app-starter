@@ -10,47 +10,53 @@ on:
 permissions:
   contents: read
 
+# Every third-party action is pinned to an exact commit (not a tag that could be
+# moved), so a compromised action release can't run in your repo. Dependabot
+# keeps these up to date; the comment shows the human-readable version.
+
 jobs:
   secrets:
     name: Leaked secrets (gitleaks)
     runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # scan full history, not just the latest commit
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Free for personal accounts. Repos owned by a GitHub organization need a
-          # free license key from gitleaks.io set as the GITLEAKS_LICENSE secret.
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+      # Runs the open-source gitleaks CLI directly: works for personal AND
+      # organization repos with no license key. The download is checksum-verified.
+      - name: Install gitleaks
+        run: |
+          curl -sSfL -o gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check
+          tar -xzf gitleaks.tar.gz gitleaks
+      - name: Scan
+        run: ./gitleaks git --redact --verbose --exit-code 1 .
 
   dependencies:
     name: Vulnerable dependencies
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - name: npm audit (fail on high/critical in production deps)
-        run: |
-          if [ -f package-lock.json ]; then
-            npm audit --omit=dev --audit-level=high
-          else
-            echo "No package-lock.json yet; skipping."
-          fi
+        run: npm audit --omit=dev --audit-level=high
 
   tests:
     name: Tests (incl. data-isolation)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       # Throwaway local database with your migrations applied, so the
       # data-isolation tests run against real row-level security rules.
       - name: Start test database
@@ -66,22 +72,31 @@ jobs:
         run: |
           OUT=$(psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -At -f supabase/checks/rls.sql)
           if [ -n "$OUT" ]; then echo "::error::Tables missing row-level security:"; echo "$OUT"; exit 1; fi
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-placeholder
 
   codeql:
     name: Code scanning (CodeQL)
+    # CodeQL is free for public repos. Private repos need GitHub Code Security
+    # (paid), so it's skipped there instead of failing every change.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           languages: javascript-typescript
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
 
   # Optional: AI security review on every PR. Requires an Anthropic API key
-  # (billed per use) saved as the ANTHROPIC_API_KEY repo secret. Uncomment to enable.
+  # (billed per use) saved as the ANTHROPIC_API_KEY repo secret. To enable:
+  # uncomment, and pin the action to a commit SHA from its releases page.
   # claude-review:
   #   if: github.event_name == 'pull_request'
   #   runs-on: ubuntu-latest
@@ -89,7 +104,7 @@ jobs:
   #     pull-requests: write
   #     contents: read
   #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: anthropics/claude-code-security-review@main
+  #     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  #     - uses: anthropics/claude-code-security-review@<COMMIT-SHA> # vX.Y.Z
   #       with:
   #         claude-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

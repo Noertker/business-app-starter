@@ -22,13 +22,22 @@ export default function DashboardPage() {
 async function Dashboard() {
   const user = await requireUser();
   const supabase = await createClient();
-  const [{ data: customers }, subscription] = await Promise.all([
+  const [{ data: customers, error }, subscription] = await Promise.all([
     supabase
       .from("customers")
       .select("id, name, email, notes, created_at")
       .order("created_at", { ascending: false }),
     getSubscription(),
   ]);
+
+  if (error) {
+    console.error("[dashboard]", error.message);
+    return (
+      <p role="alert" className="rounded-xl border border-red-600/40 p-4 text-red-600">
+        We couldn&apos;t load your customers right now. Please refresh in a moment.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -39,9 +48,12 @@ async function Dashboard() {
             Plan: {isActive(subscription?.status) ? "Pro ✅" : <>Free · <Link className="underline" href="/pricing">Upgrade</Link></>}
           </p>
         </div>
-        <form action="/auth/signout" method="post">
-          <button className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20">Sign out</button>
-        </form>
+        <div className="flex gap-2">
+          <Link href="/account" className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20">Account</Link>
+          <form action="/auth/signout" method="post">
+            <button className="rounded-lg border border-black/15 px-4 py-2 text-sm dark:border-white/20">Sign out</button>
+          </form>
+        </div>
       </div>
 
       <form action={addCustomer} className="grid gap-3 rounded-xl border border-black/10 p-4 sm:grid-cols-3 dark:border-white/10">

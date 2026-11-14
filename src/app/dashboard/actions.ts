@@ -23,6 +23,7 @@ export async function addCustomer(formData: FormData) {
     email: parsed.data.email || null,
     notes: parsed.data.notes || null,
   });
+  // The database refuses inserts past the per-user limit (see migrations).
   if (error) console.error("[addCustomer]", error.message);
   refresh();
 }
